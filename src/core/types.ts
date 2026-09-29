@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 export const SCHEMA_VERSION = 1;
 export type Interval = { start: number; end: number };
 export type Availability = Interval & { id: string; state: 'available' | 'unavailable' | 'preferred' | 'unknown' };

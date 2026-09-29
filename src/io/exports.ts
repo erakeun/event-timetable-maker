@@ -40,7 +40,7 @@ export function buildReport(event:EventData,options:ReportOptions={}):Report {
   const result:Report={title:({full:'전체 인력 배치표',person:'개인별 일정표',location:'장소·역할별 운영표',program:'행사 진행 시간표',changed:'변경된 사람 일정표'})[kind],headers:[],rows:[],totalMinutes:0,validation,generatedAt:new Date().toISOString(),statusLabel:statusLabel(event,validation)};
   if(kind==='program') {
     result.headers=['날짜','시작','종료 날짜','종료','제목','장소','담당자','담당 유형','공개 메모',...(options.internal?['운영자 메모']:[])];
-    result.rows=selected.programs.flatMap(p=>splitByDay(p.start,p.end).map(part=>[part.date,clockOf(part.start),dateOf(part.end),clockOf(part.end),p.title,location(p.locationId),p.personId?person(p.personId):'',p.dedicated?'해당 시간 전담':'연락 담당',p.publicNote,...(options.internal?[p.internalNote]:[])]));
+    result.rows=selected.programs.flatMap(p=>splitByDay(p.start,p.end).map(part=>[part.date,clockOf(part.start),dateOf(part.end),clockOf(part.end),p.title,location(p.locationId),p.personId?person(p.personId):'',p.personId?(p.dedicated?'해당 시간 전담':'연락 담당'):'',p.publicNote,...(options.internal?[p.internalNote]:[])]));
     result.totalMinutes=Object.values(validateEvent({...selected,assignments:[]}).personMinutes).reduce((sum,n)=>sum+n,0);
   } else {
     result.headers=['참여자 ID','이름','소속/팀','날짜','시작','종료 날짜','종료','장소','역할','배정 분','잠금'];
@@ -92,5 +92,19 @@ export async function createWorkbook(event:EventData,options:ReportOptions={}):P
   return new Blob([await wb.xlsx.writeBuffer() as ArrayBuffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 export function downloadBlob(blob:Blob,filename:string):void {
-  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename.replace(/[\\/:*?"<>|]/g,'_');document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeFilename(filename);document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+export function safeFilename(value:string):string {
+  const cleaned=value.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g,'_').replace(/[. ]+$/g,'').trim();
+  const named=(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(cleaned)?'_'+cleaned:cleaned)||'행사';
+  if(named.length<=160)return named;
+  const ext=named.match(/\.[a-z0-9]{1,8}$/i)?.[0]||'';
+  return named.slice(0,160-ext.length)+ext;
+}
+export function reportFilename(event:EventData,options:ReportOptions,extension:string):string {
+ const label={full:'전체시간표',person:'개인별시간표',location:'장소별시간표',program:'진행시간표',changed:'변경된사람'}[options.kind||'full'];
+ const people=options.personIds?.map(id=>historicalPerson(event,id)?.alias||historicalPerson(event,id)?.name||id);
+ const target=[people?.length===1?people[0]:people?.length?`선택${people.length}명`:'',event.locations.find(l=>l.id===options.locationId)?.name,event.roles.find(r=>r.id===options.roleId)?.name].filter(Boolean);
+ return safeFilename([event.name.slice(0,60),label,...target.map(s=>s!.slice(0,25)),options.date||'전체날짜',`v${event.edition}`,options.internal?'내부용':''].filter(Boolean).join('_'))+'.'+extension;
 }

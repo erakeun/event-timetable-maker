@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { EventData, UpdateEvent } from './core/types';
+import type { EventData, Shortage, UpdateEvent } from './core/types';
 import { createEvent, createSampleEvent, id } from './core/defaults';
 import { newRevision } from './core/revisions';
 import { listEvents, loadEvent, saveEvent, deleteEvent, clearEvents, RevisionConflictError, getStorageWarnings } from './io/storage';
@@ -20,6 +20,9 @@ export default function App(){return <ErrorBoundary><Workspace/></ErrorBoundary>
 function Workspace(){
  const [event,setEvent]=useState<EventData|null>(null),[library,setLibrary]=useState<EventData[]>([]),[step,setStep]=useState(0);
  const [saveStatus,setSaveStatus]=useState('저장 완료'),[message,setMessage]=useState(''),[blocked,setBlocked]=useState(false),[loading,setLoading]=useState(true),[archived,setArchived]=useState(false);
+ const [personFocus,setPersonFocus]=useState('');
+ const [boardFocus,setBoardFocus]=useState<Shortage|null>(null);
+ const navigate=(next:number,personId?:string)=>{setPersonFocus(personId||'');setBoardFocus(null);setStep(next);window.scrollTo({top:0,behavior:'smooth'})};
  const [undoCount,setUndoCount]=useState(0),[redoCount,setRedoCount]=useState(0);
  const current=useRef<EventData|null>(null),revisions=useRef(new Map<string,number>()),pending=useRef<EventData|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null),queue=useRef<Promise<void>>(Promise.resolve()),conflict=useRef(false),generation=useRef(0);
  const past=useRef<EventData[]>([]),future=useRef<EventData[]>([]),backupInput=useRef<HTMLInputElement>(null);
@@ -37,7 +40,7 @@ function Workspace(){
  };
  const scheduleSave=(data:EventData)=>{pending.current=data;generation.current++;setSaveStatus('저장 중…');if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>void flush(),300);};
  const display=(data:EventData|null)=>{current.current=data;setEvent(data);};
- const open=(data:EventData)=>{revisions.current.set(data.id,data.revision);past.current=[];future.current=[];setUndoCount(0);setRedoCount(0);conflict.current=false;setBlocked(false);pending.current=null;display(data);setStep(data.status==='confirmed'?4:0);setSaveStatus('저장 완료');setMessage('');};
+ const open=(data:EventData)=>{setPersonFocus('');setBoardFocus(null);revisions.current.set(data.id,data.revision);past.current=[];future.current=[];setUndoCount(0);setRedoCount(0);conflict.current=false;setBlocked(false);pending.current=null;display(data);setStep(data.status==='confirmed'?4:0);setSaveStatus('저장 완료');setMessage('');};
  const change:UpdateEvent=(next,label)=>{
   if(conflict.current||current.current?.status==='archived'){setMessage('읽기 전용입니다. 최신 자료를 열거나 사본을 만드세요.');return;}
   const before=current.current;
@@ -51,6 +54,9 @@ function Workspace(){
  const restore=async(file:File)=>{try{if(file.size>10*1024*1024)throw new Error('백업 파일은 10MB 이하여야 합니다.');const data=parseBackup(await file.text());await flush();const exists=await loadEvent(data.id);if(exists){data.id=id();data.snapshots=data.snapshots.map(s=>({...s,data:{...s.data,id:data.id}}));data.name+=' · 복원 사본';if(data.snapshots.length){data.status='draft';data.edition=Math.max(data.edition,...data.snapshots.map(s=>s.version))+1;}}data.revision=0;const saved=await saveEvent(data,null);open(saved);setMessage(exists?'같은 ID의 행사가 있어 별도 사본으로 복원했습니다.':'백업을 복원했습니다. 시간표 검사 결과를 확인하세요.');void refresh()}catch(err){setMessage('백업을 적용하지 않았습니다. 기존 자료는 유지됩니다. '+String(err))}};
  const travelHistory=(redo=false)=>{if(!event||event.status!=='draft'||blocked)return;const from=redo?future:past,to=redo?past:future;const data=from.current.pop();if(!data)return;to.current.push(structuredClone(event));display(data);scheduleSave(data);setUndoCount(past.current.length);setRedoCount(future.current.length);setMessage(redo?'다시 실행했습니다.':'되돌렸습니다.');};
  const archive=async(data:EventData)=>{if(!window.confirm(`${data.name} 행사를 ${data.status==='archived'?'보관함에서 꺼낼':'보관할'}까요?`))return;try{await saveEvent({...data,status:data.status==='archived'?(data.snapshots.at(-1)?.version===data.edition?'confirmed':'draft'):'archived'},data.revision);void refresh()}catch(err){setMessage(String(err))}};
+ const route=event?.mode==='program'?[0,5,4]:[0,1,2,3,4];
+ const routeIndex=route.indexOf(step);
+ useEffect(()=>{if(event?.mode==='program'&&![0,5,4].includes(step))setStep(5)},[event?.mode,step]);
  const readonly=event?.status!=='draft'||blocked;
  return <div className="app-shell"><header className="app-header"><div className="header-inner"><button className="brand" onClick={async()=>{await flush();if(pending.current){setMessage('저장하지 못한 내용이 있습니다. 백업이나 사본 보관 후 이동하세요.');return;}display(null);void refresh()}}><span className="brand-icon" aria-hidden="true">▤</span><span>행사 시간표 제작기<small>EVENT TIMETABLE MAKER</small></span></button><span className="local-badge">기기 내 저장 · 로그인 없음</span>{event&&<span className={'save-state '+(saveStatus==='저장 실패'?'error-text':'')} role="status">{saveStatus}</span>}</div></header>
  <input ref={backupInput} className="sr-only" type="file" accept=".json" aria-label="JSON 백업 파일" onChange={x=>{const f=x.target.files?.[0];if(f)void restore(f);x.target.value=''}}/>
@@ -65,16 +71,16 @@ function Workspace(){
   <div className="editor-title"><div><p className="eyebrow">내 행사 / {event.mode==='program'?'진행 시간표':'인력 배치표'}</p><h1>{event.name||'이름 없는 행사'} <span className="pill">{statusLabel[event.status]} · v{event.edition}</span></h1></div><div className="toolbar"><button className="button secondary" disabled={!undoCount||readonly} onClick={()=>travelHistory()}>↶ 되돌리기</button><button className="button secondary" disabled={!redoCount||readonly} onClick={()=>travelHistory(true)}>↷ 다시 실행</button><button className="button secondary" onClick={()=>backup()}>JSON 백업</button></div></div>
   {blocked&&<div className="notice error-text"><h3>다른 탭과 저장 버전이 다릅니다. 읽기 전용으로 전환했습니다.</h3><p>현재 입력을 JSON 백업 또는 사본으로 보관할 수 있습니다.</p><div className="toolbar"><button className="button secondary" onClick={()=>void duplicate(event,true)}>현재 내용 사본으로 보관</button><button className="button secondary" onClick={async()=>{if(window.confirm('현재 화면의 저장되지 않은 변경을 버리고 최신 저장본을 불러올까요?')){try{const latest=await loadEvent(event.id);if(latest)open(latest);else setMessage('다른 탭에서 삭제되었습니다. 현재 내용을 사본으로 보관하세요.')}catch(err){setMessage('최신 저장본 불러오기 실패: '+String(err))}}}}>최신 저장본 불러오기</button></div></div>}
   {saveStatus==='저장 실패'&&!blocked&&<div className="notice error-text"><p>편집 내용은 화면에 남아 있습니다. JSON 백업 후 저장을 다시 시도하세요.</p><button className="button secondary" onClick={()=>{pending.current=event;void flush()}}>저장 다시 시도</button></div>}
-  {event.status==='confirmed'&&<div className="confirmed-bar"><span>확정본 v{event.edition} · 과거 기록은 변경되지 않습니다.</span><button className="button secondary" onClick={()=>{const draft=newRevision(event);past.current=[];future.current=[];setUndoCount(0);setRedoCount(0);display(draft);scheduleSave(draft);setMessage('새 개정 초안을 만들었습니다.');setStep(3)}}>새 개정 초안 만들기</button></div>}
+  {event.status==='confirmed'&&<div className="confirmed-bar"><span>확정본 v{event.edition} · 과거 기록은 변경되지 않습니다.</span><button className="button secondary" onClick={()=>{const draft=newRevision(event);past.current=[];future.current=[];setUndoCount(0);setRedoCount(0);display(draft);scheduleSave(draft);setMessage('새 개정 초안을 만들었습니다.');setStep(event.mode==='program'?5:3)}}>새 개정 초안 만들기</button></div>}
   {event.status==='archived'&&<div className="notice">보관한 행사는 읽기 전용입니다. 보관함에서 보관 해제하거나 사본을 만들어 편집하세요.</div>}
-  <nav className="steps" aria-label="행사 편집 단계">{steps.map((label,i)=><button key={label} aria-current={step===i?'step':undefined} onClick={()=>setStep(i)}><span>{String(i+1).padStart(2,'0')}</span>{label}</button>)}<button aria-current={step===5?'step':undefined} onClick={()=>setStep(5)}><span>＋</span>진행 시간표</button></nav>
+  <nav className="steps" aria-label="행사 편집 단계">{route.map((value,i)=><button key={value} aria-current={step===value?'step':undefined} onClick={()=>setStep(value)}><span>{String(i+1).padStart(2,'0')}</span>{value===5?'진행 시간표':steps[value]}</button>)}{event.mode!=='program'&&<button aria-current={step===5?'step':undefined} onClick={()=>setStep(5)}><span>＋</span>진행 시간표</button>}</nav>{event.mode==='program'&&<details className="mode-expand"><summary>인력 배정도 필요하신가요?</summary><p>현재 진행 일정은 그대로 유지하고 장소·인원·참여자·배치표 단계를 추가합니다. 변경 직후 되돌리기도 가능합니다.</p><button className="button secondary" disabled={readonly} onClick={()=>{change({...event,mode:'staffing'},'진행 일정을 유지하며 인력 배정 모드로 확장했습니다.');setStep(1)}}>인력 배정 추가</button></details>}
   {step===0&&<Setup event={event} onChange={change} readOnly={readonly}/>}
   {step===1&&<><Conditions event={event} onChange={change} readOnly={readonly}/><ImportPanel event={event} onChange={change} readOnly={readonly}/></>}
-  {step===2&&<><People event={event} onChange={change} readOnly={readonly}/><ImportPanel event={event} onChange={change} readOnly={readonly}/></>}
-  {step===3&&<Board key={event.id} event={event} onChange={change} readOnly={readonly}/>}
-  {step===4&&<Review event={event} onChange={change} onBackup={()=>backup()} readOnly={readonly}/>}
+  {step===2&&<><People key={event.id+personFocus} initialPersonId={personFocus} event={event} onChange={change} readOnly={readonly}/><ImportPanel event={event} onChange={change} readOnly={readonly}/></>}
+  {step===3&&<Board initialSlot={boardFocus} onNavigate={navigate} key={event.id} event={event} onChange={change} readOnly={readonly}/>}
+  {step===4&&<Review onNavigate={navigate} onSlot={slot=>{setBoardFocus(slot);setStep(3)}} event={event} onChange={change} onBackup={()=>backup()} readOnly={readonly}/>}
   {step===5&&<Program event={event} onChange={change} readOnly={readonly}/>}
-  <div className="step-footer"><button className="button secondary" disabled={step===0} onClick={()=>setStep(Math.max(0,step-1))}>← 이전 단계</button><p>현재 기기·브라우저에 저장됩니다. 중요한 변경 뒤에는 백업하세요.</p><button className="button primary" disabled={step>=4} onClick={()=>setStep(Math.min(4,step+1))}>다음 단계 →</button></div>
+  <div className="step-footer"><button className="button secondary" disabled={step===0} onClick={()=>setStep(routeIndex<0?4:route[Math.max(0,routeIndex-1)]??0)}>← 이전 단계</button><p>현재 기기·브라우저에 저장됩니다. 중요한 변경 뒤에는 백업하세요.</p><button className="button primary" disabled={step===4} onClick={()=>setStep(routeIndex<0?4:route[routeIndex+1]??4)}>다음 단계 →</button></div>
  </>}
- </main><footer className="app-footer"><span>행사 시간표 제작기 · V1</span><span>Asia/Seoul · 자료를 서버로 전송하지 않습니다.</span></footer></div>;
+ </main><footer className="app-footer"><span>행사 시간표 제작기 · V1.1</span><span>Asia/Seoul · 자료를 서버로 전송하지 않습니다.</span></footer></div>;
 }

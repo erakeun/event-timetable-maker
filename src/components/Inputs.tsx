@@ -1,5 +1,6 @@
 import { Children, cloneElement, isValidElement, useId, type ReactNode } from 'react';
 import type { EventData, Interval, UpdateEvent } from '../core/types';
+import { normalizeTags } from '../core/tags';
 import { clockOf, dateOf, toMinute } from '../core/time';
 
 export interface EditorProps { event: EventData; onChange: UpdateEvent; readOnly?: boolean }
@@ -28,7 +29,7 @@ export function RangeFields({ value, onChange, prefix = '', disabled = false }: 
     <label className="row"><input type="checkbox" checked={value.nextDay} disabled={disabled} onChange={e => onChange({ ...value, nextDay: e.target.checked })} />다음 날 종료 (+1일)</label>
   </div>;
 }
-export function tagsFrom(value: string) { return value.split(',').map(s => s.trim()).filter(Boolean); }
+export function tagsFrom(value: string) { return normalizeTags(value); }
 export function minuteValue(value: string): number | undefined { return value === '' ? undefined : Math.max(0, Math.round(Number(value))); }
 export function displayPerson(person: { name: string; alias: string; team: string; id: string }) { return `${person.alias || person.name}${person.team ? ` · ${person.team}` : ''}`; }
 export function nextDate(date: string) { return new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10); }

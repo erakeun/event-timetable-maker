@@ -38,7 +38,7 @@ async function importRoster(page: Page, count = 12) {
   await page.getByText('CSV / Excel 가져오기 · 입력 서식', { exact: true }).click();
   await page.getByLabel('엑셀 표 붙여넣기 (첫 행은 열 제목)').fill('id\tname\tteam\n' + Array.from({ length: count }, (_, i) => `${String(i + 1).padStart(4, '0')}\t가상 참여자 ${String(i + 1).padStart(2, '0')}\t가상 운영팀`).join('\n'));
   await page.getByRole('button', { name: '붙여넣기 미리보기', exact: true }).click();
-  await expect(page.getByText(`입력 오류 없음 · ${count}개 항목`)).toBeVisible();
+  await expect(page.getByText(`정상 반영 준비 완료 · ${count}개 항목`)).toBeVisible();
   await page.getByRole('button', { name: '미리보기 내용 적용', exact: true }).click();
 }
 async function auto(page: Page) {
@@ -181,6 +181,8 @@ test('program-only parallel locations, dedicated conflict correction, immutable 
   await page.goto('./');
   await page.getByRole('button', { name: /인원 배치 없이 진행 시간표만 만들기/ }).click();
   await page.getByLabel('행사명', { exact: true }).fill('가상 병렬 프로그램');
+  await page.getByText('인력 배정도 필요하신가요?',{exact:true}).click();
+  await page.getByRole('button',{name:'인력 배정 추가',exact:true}).click();
   await step(page, '참여자·가능시간');
   await page.getByLabel('추가할 참여자 이름').fill('가상 진행자');
   await page.getByRole('button', { name: '+ 참여자 추가', exact: true }).click();

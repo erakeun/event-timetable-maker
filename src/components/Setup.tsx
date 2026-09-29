@@ -39,7 +39,7 @@ export default function Setup({ event, onChange, readOnly = false }: EditorProps
       })}</div>
       <p className="small muted">운영시간을 바꾸어도 기존 배정은 자동으로 잘라내지 않습니다. 배치표에서 수정 필요 항목을 확인하세요.</p>
     </section>
-    <section className="panel"><h2>시간표 기본 설정</h2><fieldset disabled={readOnly}><div className="form-grid">
+    {event.mode!=='program'&&<section className="panel"><h2>시간표 기본 설정</h2><fieldset disabled={readOnly}><div className="form-grid">
       <Field label="화면 눈금 간격" help="표시 간격이며 실제 교대 길이와는 다릅니다."><select value={event.policy.gridMinutes} onChange={e => policy({ gridMinutes: Number(e.target.value) })}>{[5, 10, 15, 20, 30, 60].map(n => <option key={n} value={n}>{n}분</option>)}</select></Field>
       <Field label="자동배정 우선순위"><select value={event.policy.preset} onChange={e => policy({ preset: e.target.value as typeof event.policy.preset })}><option value="balanced">균등 배정 우선</option><option value="continuous">연속 근무 우선</option><option value="preferred">선호시간 우선</option></select></Field>
     </div></fieldset>
@@ -51,6 +51,6 @@ export default function Setup({ event, onChange, readOnly = false }: EditorProps
         <Field label="자동배정 탐색 제한 (초)"><input type="number" min={0.1} max={30} step={0.1} value={event.policy.timeLimitMs / 1000} onChange={e => policy({ timeLimitMs: Math.max(100, Math.min(30000, Math.round(Number(e.target.value) * 1000))) })} /></Field>
         <label className="row"><input type="checkbox" checked={event.policy.allowOverstaff} onChange={e => policy({ allowOverstaff: e.target.checked })} />수동 초과 인원 허용 (주의 표시)</label>
       </div><p className="small muted">우선순위는 필수 조건을 완화하지 않습니다. 개인별 시간 상한·휴게는 참여자 화면에서 설정합니다.</p></fieldset></details>
-    </section>
+    </section>}
   </div>;
 }

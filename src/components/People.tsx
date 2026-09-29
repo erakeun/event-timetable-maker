@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import BulkConditions from './BulkConditions';
 import { createPerson, id } from '../core/defaults';
 import { dayIntervals, dateOf, formatRange, toMinute } from '../core/time';
 import type { Availability, Person } from '../core/types';
@@ -14,10 +15,10 @@ function preferredIsAvailable(person: Person, start: number, end: number) {
   });
 }
 
-export default function People({ event, onChange, readOnly = false }: EditorProps) {
+export default function People({ event, onChange, readOnly = false, initialPersonId = '' }: EditorProps & {initialPersonId?:string}) {
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [activeId, setActiveId] = useState(event.people[0]?.id ?? '');
+  const [activeId, setActiveId] = useState(initialPersonId || event.people[0]?.id || '');
   const [filter, setFilter] = useState('');
   const [range, setRange] = useState(() => rangeDraft(event));
   const [state, setState] = useState<Availability['state']>('available');
@@ -90,8 +91,10 @@ export default function People({ event, onChange, readOnly = false }: EditorProp
     <section className="panel"><div className="section-head"><div><h2>참여자 명단</h2><p className="muted">입력하지 않은 시간은 미확인입니다. 자동배정에는 확인된 가능시간만 사용합니다.</p></div><span className="pill">{event.people.length}명</span></div>
       <form className="row" onSubmit={e => { e.preventDefault(); if (!name.trim()) return; const person = createPerson(name.trim()); onChange({ ...event, people: [...event.people, person] }, '참여자 추가'); setName(''); setActiveId(person.id); setEditingRange(null); }}><Field label="추가할 참여자 이름"><input value={name} onChange={e => setName(e.target.value)} required maxLength={100} disabled={readOnly} placeholder="이름을 입력하세요" /></Field><button className="button primary" disabled={readOnly}>+ 참여자 추가</button></form>
       <div className="toolbar"><Field label="명단 검색"><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="이름, 팀, 별칭 또는 ID" /></Field><button className="button secondary" disabled={readOnly || !selectedIds.length || !event.days.length} onClick={() => setAllAvailable(selectedIds)}>선택한 {selectedIds.length}명 전체 운영시간 가능</button></div>
+      <BulkConditions event={event} ids={selectedIds} onChange={onChange} readOnly={readOnly}/>
       {!event.people.length ? <p className="empty">아직 참여자가 없습니다. 이름을 직접 추가하거나 아래 가져오기에서 명단을 입력하세요.</p> : <div className="table-wrap"><table><thead><tr><th><input aria-label="현재 검색 결과 모두 선택" type="checkbox" checked={people.length > 0 && people.every(p => selectedIds.includes(p.id))} onChange={e => setSelected(e.target.checked ? [...new Set([...selectedIds, ...people.map(p => p.id)])] : selectedIds.filter(id => !people.some(p => p.id === id)))} /></th><th>이름 / 별칭</th><th>소속·팀</th><th>시간 입력</th><th>작업</th></tr></thead><tbody>{people.map(person => <tr key={person.id} aria-selected={active?.id === person.id}><td><input type="checkbox" aria-label={`${displayPerson(person)} 선택`} checked={selectedIds.includes(person.id)} onChange={e => setSelected(e.target.checked ? [...selectedIds, person.id] : selectedIds.filter(id => id !== person.id))} /></td><td><button className="button secondary" onClick={() => { setActiveId(person.id); setEditingRange(null); setError(''); }}><span aria-hidden="true" style={{ color: person.color }}>● </span>{person.name}{person.alias ? ` (${person.alias})` : ''}</button><div className="small muted">ID {person.id}</div></td><td>{person.team || '—'}</td><td>{person.availability.length ? `${person.availability.filter(a => a.state === 'available').length}개 가능 범위` : '미확인'}</td><td><button className="button secondary" onClick={() => { setActiveId(person.id); setEditingRange(null); setError(''); }}>편집</button></td></tr>)}</tbody></table></div>}
     </section>
+    {active && !people.some(p=>p.id===active.id)&&<p className="notice">현재 편집 대상은 {displayPerson(active)}입니다. 검색 결과에서 이름을 눌러 편집 대상을 바꾸세요.</p>}
     {active && <section className="panel"><div className="section-head"><div><h2>{displayPerson(active)} · 정보와 가능시간</h2><p className="small muted">이름을 바꾸어도 ID로 연결된 배정은 유지됩니다.</p></div><button className="button danger" disabled={readOnly} onClick={() => deletePerson(active)}>참여자 삭제</button></div>
       <fieldset disabled={readOnly}><div className="form-grid">
         <Field label="참여자 이름"><input value={active.name} maxLength={100} onChange={e => patch(active, { name: e.target.value })} /></Field>

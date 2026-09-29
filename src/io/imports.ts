@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { normalizeTags } from '../core/tags';
 import type { Availability, Demand, EventData, Person, ValidationResult } from '../core/types';
 import { toMinute } from '../core/time';
 import { validateEvent } from '../core/validate';
@@ -94,8 +95,9 @@ function inspectZipLimits(buffer:ArrayBuffer):void {
   }
 }
 export function guessMapping(kind: ImportKind, headers: string[]): ColumnMapping {
+  const aliases:Record<string,string[]>={id:['번호','참여자번호'],name:['성명','참여자명'],team:['소속','팀','소속·팀'],tags:['자격','자격 태그','자격증'],alias:['별칭']};
   const mapping: ColumnMapping={};
-  IMPORT_FIELDS[kind].forEach(field=>{const h=headers.find(h=>h.toLowerCase()===field.toLowerCase()||h===FIELD_LABELS[field]);if(h!==undefined)mapping[field]=h;});
+  IMPORT_FIELDS[kind].forEach(field=>{const h=headers.find(h=>h.toLowerCase()===field.toLowerCase()||h===FIELD_LABELS[field]||aliases[field]?.includes(h.trim()));if(h!==undefined)mapping[field]=h;});
   return mapping;
 }
 function parseDate(v: ImportCell | undefined,date1904=false): string {
@@ -127,7 +129,7 @@ export function previewImport(event: EventData, kind: ImportKind, table: ImportT
         const allowedRoleIds=text(value('allowedRoleIds')).split(/[;|]/).map(s=>s.trim()).filter(Boolean);
         if(allowedRoleIds.some(id=>!event.roles.some(r=>r.id===id)))throw new Error('허용 역할 ID가 행사에 없습니다.');
         const color=text(value('color'))||'#386e62';if(!/^#[0-9a-f]{6}$/i.test(color))throw new Error('색상은 #386e62 같은 6자리 HEX 형식이어야 합니다.');
-        records.push({id,name,team:text(value('team')),alias:text(value('alias')),tags:text(value('tags')).split(/[;|]/).map(s=>s.trim()).filter(Boolean),color,allowedRoleIds,blockedDates:[],availability:[],minMode:'soft'});
+        records.push({id,name,team:text(value('team')),alias:text(value('alias')),tags:normalizeTags(value('tags')),color,allowedRoleIds,blockedDates:[],availability:[],minMode:'soft'});
       } else {
         const date=parseDate(value('date'),table.date1904);if(!event.days.some(d=>d.date===date))throw new Error('행사 운영 날짜에 없는 날짜입니다.');
         const start=toMinute(date,parseClock(value('start'))), end=toMinute(date,parseClock(value('end')),boolean(value('nextDay')));
@@ -193,8 +195,22 @@ export async function createTemplate(kind:ImportKind,event?:EventData):Promise<B
   fields.forEach((field,i)=>{sheet.getColumn(i+1).width=Math.max(18,field.length+3);sheet.getColumn(i+1).numFmt='@';});
   sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter={from:'A1',to:{row:1,column:fields.length}};
   const guide=wb.addWorksheet('작성안내');guide.columns=[{width:26},{width:100}];
-  guide.addRows([['서식','데이터는 첫 시트 2행부터 작성합니다. 첫 행 제목을 유지하세요.'],['ID','ID는 텍스트 형식입니다. 명단의 선행 0을 보존합니다. 이름으로 합치지 않습니다.'],['날짜와 시각','YYYY-MM-DD / HH:MM. 다음 날 종료는 예/아니오.'],['목록','태그와 허용 역할 ID 여러 개는 ; 로 구분합니다.'],['가능 상태','가능 / 불가 / 미확인 / 선호. 미입력은 미확인입니다.'],['업데이트','기존 ID 기준 업데이트만 연결을 보존합니다. 전체 교체는 적용 전 영향을 확인하세요.'],['범위','최대 10MB, 10,000행, 10시트. 수식 셀은 값으로 변환하세요.']]);
+  guide.addRows([['서식','데이터는 첫 시트 2행부터 작성합니다. 첫 행 제목을 유지하세요.'],['ID','ID는 텍스트 형식입니다. 명단의 선행 0을 보존합니다. 이름으로 합치지 않습니다.'],['날짜와 시각','YYYY-MM-DD / HH:MM. 다음 날 종료는 예/아니오.'],['목록','자격 태그는 쉼표·세미콜론·줄바꿈으로 구분합니다. 허용 역할 ID는 ; 로 구분합니다.'],['가능 상태','가능 / 불가 / 미확인 / 선호. 미입력은 미확인입니다.'],['업데이트','기존 ID 기준 업데이트만 연결을 보존합니다. 전체 교체는 적용 전 영향을 확인하세요.'],['범위','최대 10MB, 10,000행, 10시트. 수식 셀은 값으로 변환하세요.']]);
   if(event){guide.addRow(['행사 날짜',event.days.map(d=>d.date).join(', ')]);for(const p of event.people)guide.addRow(['참여자 ID',`${p.id} · ${p.name}`]);for(const l of event.locations)guide.addRow(['장소 ID',`${l.id} · ${l.name}`]);for(const r of event.roles)guide.addRow(['역할 ID',`${r.id} · ${r.name}`]);}
   return new Blob([await wb.xlsx.writeBuffer() as ArrayBuffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 export function createCsvTemplate(kind:ImportKind):Blob {return new Blob(['\uFEFF'+IMPORT_FIELDS[kind].join(',')+'\r\n'],{type:'text/csv;charset=utf-8'});}
+
+/** Review what will actually be stored, separately from syntax validation. */
+export function reviewImport(preview: ImportPreview) {
+  const {table,mapping}=preview;
+  const columns=table.headers.map((header,index)=>({header,fields:IMPORT_FIELDS[preview.kind].filter(field=>mapping[field]===header||mapping[field]===index)}));
+  const ignored=columns.filter(column=>!column.fields.length).map(column=>column.header);
+  const duplicate=columns.filter(column=>column.fields.length>1).map(column=>column.header);
+  const normalizedRows=preview.kind==='roster'?table.rows.filter(row=>{
+    const column=mapping.tags;
+    const raw=row[typeof column==='number'?column:table.headers.indexOf(column)];
+    return raw!=null && String(raw)!==normalizeTags(raw).join(';');
+  }).length:0;
+  return {columns,ignored,duplicate,normalizedRows,validRows:preview.records.length,errorRows:preview.errors.length};
+}

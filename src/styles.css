@@ -11,3 +11,20 @@
 .print-table.program-table th:nth-child(1){width:24%}.print-table.program-table th:nth-child(2){width:18%}.print-table.program-table th:nth-child(3){width:12%}.print-table.program-table th:nth-child(4){width:14%}.print-table.program-table th:nth-child(5){width:13%}.print-table.program-table th:last-child{width:19%}.print-table.staff-table th:nth-child(1){width:17%}.print-table.staff-table th:nth-child(2){width:14%}.print-table.staff-table th:nth-child(3){width:25%}.print-table.staff-table th:nth-child(4){width:14%}.print-table.staff-table th:nth-child(5){width:14%}.print-table.staff-table th:nth-child(6){width:7%}.print-table.staff-table th:nth-child(7){width:9%}@media print{html,body{background:#fff!important}}
 
 .print-table .report-metadata>th{width:auto!important;background:#fff!important;border:0;padding:0;font-weight:400}.report-metadata .print-title{margin-bottom:10px}.report-metadata .print-meta{margin-bottom:14px}@media print{.print-table thead{display:table-header-group}.print-table .report-metadata>th{background:#fff!important;padding-top:2px}.print-foot{break-inside:avoid}.print-page{break-inside:auto}}
+
+/* V1.1: keep the selected assignment and its controls together on phones. */
+.bulk-conditions { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, #d5ddd7); border-radius: 12px; }
+.bulk-preview { max-height: 280px; overflow: auto; }
+.mode-expand { margin-bottom: 1rem; }
+.focused-slot { box-shadow: inset 0 0 0 3px #286450; background: #edf7f0; }
+.editor-context { overflow-wrap: anywhere; }
+.mobile-editor-close { display: none; }
+@media (max-width: 700px) {
+ .assignment-editor.editor-open { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; max-height: 68dvh; overflow-y: auto; border: 2px solid #286450; border-radius: 18px 18px 0 0; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px #0003; }
+ .assignment-editor.editor-open .mobile-editor-close { display: inline-flex; }
+ .assignment-editor.editor-open .section-head { position: sticky; top: -16px; background: white; padding: 8px 0; z-index: 1; }
+ .assignment-editor.editor-open .form-grid { grid-template-columns: 1fr 1fr; }
+ .assignment-editor.editor-open .toolbar { gap: 8px; }
+ .assignment-editor.editor-open .button { min-height: 44px; }
+ .steps { flex-wrap: wrap; }
+}
