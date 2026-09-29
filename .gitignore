@@ -1,0 +1,14 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.env*
+*.tsbuildinfo
+*.backup.json
+work/
+
+# Generated verification artifacts stay local
+docs/qa/*
+!docs/qa/core-test-matrix.md
+.DS_Store
+*.log
