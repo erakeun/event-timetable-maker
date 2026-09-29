@@ -47,7 +47,7 @@ test('7d100p10loc real Worker cancel preserves existing assignments, locks and t
   const before=(await stored(page)).find(row=>row.id===e.id)!;expect(before.assignments).toHaveLength(560);
   let workerStarted=false,workerClosed=false;page.on('worker',worker=>{workerStarted=true;worker.on('close',()=>{workerClosed=true;});});
   await page.getByLabel('자동배정 범위').selectOption('all');
-  const start=performance.now();await page.getByRole('button',{name:'자동배정 초안 만들기',exact:true}).click();await page.getByRole('button',{name:'계산 취소',exact:true}).click();
+  const start=performance.now();const workerReady=page.waitForEvent('worker');await page.getByRole('button',{name:'자동배정 초안 만들기',exact:true}).click();await workerReady;await page.getByRole('button',{name:'계산 취소',exact:true}).click();
   await expect(page.getByText('계산을 취소했습니다. 기존 배치표는 변경되지 않았습니다.')).toBeVisible();
   await expect.poll(()=>workerStarted).toBe(true);await expect.poll(()=>workerClosed).toBe(true);
   await expect(page.getByRole('heading',{name:'배정 변경 미리보기'})).toHaveCount(0);await expect(page.getByRole('button',{name:'이 초안 적용',exact:true})).toHaveCount(0);
