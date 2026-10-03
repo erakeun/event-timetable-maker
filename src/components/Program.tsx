@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import ProgramPaste from './ProgramPaste';
 import { id } from '../core/defaults';
 import { dateOf, formatRange } from '../core/time';
 import type { ProgramItem } from '../core/types';
@@ -57,7 +58,7 @@ export default function Program({ event, onChange, readOnly = false }: EditorPro
       {editing && <Field label="시작시간 변경 적용 대상"><select value={moveFollowing ? 'following' : 'one'} onChange={e => setMoveFollowing(e.target.value === 'following')}><option value="one">이 항목만 이동</option><option value="following">이후 시작하는 진행 항목도 함께 이동</option></select></Field>}
       {error && <p className="notice" role="alert">{error}</p>}<div className="toolbar"><button className="button primary">{editing ? '진행 항목 수정 적용' : '+ 진행 항목 추가'}</button>{editing && <button className="button secondary" type="button" onClick={() => { setEditing(null); setTitle(''); setPublicNote(''); setInternalNote(''); setError(''); }}>수정 취소</button>}</div>
     </fieldset></form>
-  </section><section className="panel"><div className="section-head"><h2>진행 순서</h2><p className="small muted">순서 버튼은 표시 순서만 바꿉니다. 실제 시각은 항목 수정에서 변경하세요.</p></div>
+  </section><ProgramPaste key={event.id} event={event} onChange={onChange} readOnly={readOnly}/><section className="panel"><div className="section-head"><h2>진행 순서</h2><p className="small muted">순서 버튼은 표시 순서만 바꿉니다. 실제 시각은 항목 수정에서 변경하세요.</p></div>
     {conflicts.length > 0 && <div className="notice" role="status"><strong>동일 장소 중복 주의</strong><ul>{conflicts.map((message, index) => <li key={index}>{message}</li>)}</ul><p className="small">시간·장소를 수정하거나 두 항목의 장소 공유 허용을 명시하세요.</p></div>}
     {!event.programs.length ? <p className="empty">첫 진행 항목을 추가해 주세요. 서로 다른 장소의 병렬 일정도 만들 수 있습니다.</p> : <div className="table-wrap"><table><thead><tr><th>순서</th><th>시간·항목</th><th>장소</th><th>담당자</th><th>공개 메모</th><th>작업</th></tr></thead><tbody>{event.programs.map((item, index) => {
       const person = event.people.find(p => p.id === item.personId);

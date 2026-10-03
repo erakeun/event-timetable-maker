@@ -1,0 +1,45 @@
+import { test } from 'vitest';
+import type { EventData } from '../src/core/types';
+import type { PastePreview } from '../src/io/programPaste';
+import assert from 'node:assert/strict';
+import {parseTSV,suggestedMapping,previewAppend,applyAppend,calendarMinute} from '../src/io/programPaste';
+import {createEvent,createPerson} from '../src/core/defaults';
+import {validateEvent} from '../src/core/validate';
+
+const header='날짜\t시작\t종료\t제목\t장소\t다음 날 종료\t공개 메모';
+const line=(title='개회',start='10:00',end='10:20',place='가상홀',day='2026-10-20',next='아니오',note='')=>[day,start,end,title,place,next,note].join('\t');
+const base=()=>{const e=createEvent('가상 행사','program');e.id='fake-event';e.days=[{id:'d',date:'2026-10-20',start:'09:00',end:'17:00',nextDay:false}];e.locations=[{id:'hall',name:'가상홀'}];const {snapshots: _snapshots,...snapshotData}=structuredClone(e);e.snapshots=[{id:'old',version:1,confirmedAt:'2026-10-01T00:00:00Z',data:{...snapshotData,status:'confirmed'}}];e.edition=2;return e;};
+const preview=(input: string,event=base())=>{const t=parseTSV(input);return previewAppend(event,t,suggestedMapping(t.headers));};
+const append=(event: EventData,p: PastePreview)=>applyAppend(event,p,{confirmed:true,idFactory:(()=>{let i=0;return()=>`new-${++i}`;})()});
+
+test('20행을 한 번에 추가하며 순서·원본·확정 스냅샷 보존',()=>{const e=base();e.programs=[{id:'old',title:'기존',start:calendarMinute('2026-10-20','09:00'),end:calendarMinute('2026-10-20','09:05'),locationId:'hall',personId:'',dedicated:false,publicNote:'',internalNote:'유지',allowSharedLocation:false}];const before=JSON.stringify(e);const rows=Array.from({length:20},(_,i)=>line(`진행 ${i+1}`,'10:00','10:20',''));const p=preview(header+'\n'+rows.join('\n'),e),out=append(e,p);assert.equal(out.programs.length,21);assert.deepEqual(out.programs.map(x=>x.title),['기존',...rows.map((_,i)=>`진행 ${i+1}`)]);assert.equal(JSON.stringify(e),before);assert.deepEqual(out.snapshots,e.snapshots);assert.deepEqual(out.assignments,e.assignments);assert.deepEqual(out.programs[0],e.programs[0]);assert.equal(validateEvent(out).errors.length,0);});
+test('BOM·CRLF·따옴표 안 탭/줄바꿈을 보존',()=>{const t=parseTSV('\uFEFFA\tB\r\n"두\t칸"\t"여러\n줄"\r\n');assert.deepEqual(t.rows[0].cells,['두\t칸','여러\n줄']);});
+test('닫히지 않은 따옴표 거부',()=>assert.throws(()=>parseTSV('A\tB\n"bad\tx')));
+test('닫는 따옴표 뒤 쓰레기 거부',()=>assert.throws(()=>parseTSV('A\tB\n"ok"bad\tx')));
+test('중복·빈 열제목 거부',()=>{assert.throws(()=>parseTSV('A\tA\nx\ty'));assert.throws(()=>parseTSV('A\t\nx\ty'));});
+test('쉼표 CSV를 TSV로 추측 변환하지 않음',()=>{const t=parseTSV('날짜,시작,종료,제목\n2026-10-20,10:00,11:00,개회');assert.throws(()=>previewAppend(base(),t,suggestedMapping(t.headers)),/열을 지정/);});
+test('필수 열 누락·동일열 중복 매핑 거부',()=>{const t=parseTSV(header+'\n'+line());const m=suggestedMapping(t.headers);assert.throws(()=>previewAppend(base(),t,{...m,date:''}));assert.throws(()=>previewAppend(base(),t,{...m,end:'시작'}));});
+test('직접 열 매핑: 원본 헤더명 달라도 의미는 명시적으로 연결',()=>{const t=parseTSV('D\tS\tE\tT\n2026-10-20\t10:00\t10:20\t개회');const p=previewAppend(base(),t,{date:'D',start:'S',end:'E',title:'T'});assert.equal(p.hasErrors,false);assert.equal(p.rows[0].record.title,'개회');});
+test('명시적 확인 없이 적용 불가',()=>{const e=base(),p=preview(header+'\n'+line(),e);assert.throws(()=>applyAppend(e,p),/명시적/);});
+test('미리보기 뒤 데이터 변경·재적용 거부',()=>{const e=base(),p=preview(header+'\n'+line(),e),out=append(e,p);assert.throws(()=>append(out,p),/바뀌/);e.name='changed';assert.throws(()=>append(e,p),/바뀌/);});
+test('잘못된 날짜/시각·빈 제목·길이초과는 행별 오류',()=>{const p=preview(header+'\n'+line('', '25:00','26:00','가상홀','2026-02-30')+'\n'+line('x'.repeat(201)));assert.equal(p.hasErrors,true);assert.ok(p.rows.every(x=>x.errors.length));assert.equal(p.rows[0].sourceRow,2);});
+test('오류 하나라도 있으면 정상 행도 몰래 부분적용하지 않음',()=>{const e=base(),p=preview(header+'\n'+line()+'\n'+line('오류','14:00','13:00'),e);assert.throws(()=>append(e,p),/오류/);assert.equal(e.programs.length,0);});
+test('익일은 추정하지 않고 명시해야 함',()=>{const e=base();e.days[0]={...e.days[0],start:'22:00',end:'02:00',nextDay:true};const bad=preview(header+'\n'+line('철수','23:30','00:15','가상홀','2026-10-20',''),e);assert.equal(bad.hasErrors,true);const good=preview(header+'\n'+line('철수','23:30','00:15','가상홀','2026-10-20','예'),e);assert.equal(good.hasErrors,false);assert.equal(good.rows[0].record.end-good.rows[0].record.start,45);});
+test('운영시간 밖·알 수 없는 익일값 차단',()=>{assert.equal(preview(header+'\n'+line('너무 늦음','16:30','18:00')).hasErrors,true);assert.equal(preview(header+'\n'+line('X','10:00','10:20','가상홀','2026-10-20','maybe')).hasErrors,true);});
+test('장소 신규생성·동명이름 추측연결 금지',()=>{assert.equal(preview(header+'\n'+line('X','10:00','10:20','없는홀')).hasErrors,true);const e=base();e.locations.push({id:'hall2',name:'가상홀'});assert.equal(preview(header+'\n'+line(),e).hasErrors,true);assert.equal(preview(header+'\n'+line('X','10:00','10:20','hall2'),e).hasErrors,false);});
+test('중복행 보존, 별도확인 없으면 적용 금지',()=>{const e=base(),p=preview(header+'\n'+line()+'\n'+line(),e);assert.equal(p.hasDuplicates,true);assert.equal(p.rows.length,2);assert.throws(()=>append(e,p),/중복/);let i=0;const out=applyAppend(e,p,{confirmed:true,duplicatesConfirmed:true,idFactory:()=>`dup-${++i}`});assert.equal(out.programs.length,2);});
+test('기존 항목과 같은 행도 중복 경고',()=>{const e=base(),p=preview(header+'\n'+line(),e),out=append(e,p);const next=preview(header+'\n'+line(),out);assert.equal(next.hasDuplicates,true);});
+test('[시작,종료) 경계의 맞닿은 항목은 중복시간 아님',()=>{const p=preview(header+'\n'+line('A','10:00','10:20')+'\n'+line('B','10:20','10:40'));assert.ok(p.rows.every(x=>!x.warnings.some(w=>w.includes('겹'))));assert.ok(!p.validation.warnings.some(x=>x.code==='PROGRAM_LOCATION_OVERLAP'));});
+test('공유검증기가 실제 겹친 장소를 경고',()=>{const p=preview(header+'\n'+line('A','10:00','10:30')+'\n'+line('B','10:20','10:40'));assert.ok(p.validation.warnings.some(x=>x.code==='PROGRAM_LOCATION_OVERLAP'));});
+test('미반영 열을 명확히 남기고 연락처를 ProgramItem에 넣지 않음',()=>{const p=preview(header+'\t연락처\n'+line()+'\t가상 문자열');assert.deepEqual(p.ignoredColumns,['연락처']);assert.ok(!JSON.stringify(p.rows[0].record).includes('가상 문자열'));assert.equal(p.rows[0].record.personId,'');assert.equal(p.rows[0].record.internalNote,'');});
+test('HTML처럼 보이는 제목도 문자열로 보존하고 실행하지 않음',()=>{const p=preview(header+'\n'+line('<img src=x onerror=alert(1)>'));assert.equal(p.rows[0].record.title,'<img src=x onerror=alert(1)>');});
+test('확정/보관 행사는 추가 금지',()=>{for(const status of ['confirmed','archived'] as const){const e=base();e.status=status;assert.throws(()=>preview(header+'\n'+line(),e),/초안/);}});
+test('중복 ID 생성 실패도 원본은 불변',()=>{const e=base(),before=JSON.stringify(e),p=preview(header+'\n'+line('A','10:00','10:20')+'\n'+line('B','10:20','10:40'),e);assert.throws(()=>applyAppend(e,p,{confirmed:true,idFactory:()=> 'same'}),/ID/);assert.equal(JSON.stringify(e),before);});
+test('열 수 불일치와 초과행·초과바이트 거부',()=>{assert.equal(preview(header+'\n'+line()+'\textra').hasErrors,true);assert.throws(()=>parseTSV(header+'\n'+Array(301).fill(line()).join('\n')),/300/);assert.throws(()=>parseTSV('x'.repeat(500001)),/500KB/);});
+test('공유검증기 기존 데이터 오류를 숨기지 않음',()=>{const e=base();e.locations.push({id:'hall',name:'중복 ID'});const p=preview(header+'\n'+line('X','10:00','10:20',''),e);assert.equal(p.hasErrors,true);assert.ok(p.validation.errors.length);});
+test('미리보기 객체/행은 동결되어 사후 변경 방지',()=>{const p=preview(header+'\n'+line());assert.throws(()=>p.rows[0].record.title='altered',TypeError);});
+
+test('정확한 장소 ID는 다른 장소의 이름보다 우선하며 이름은 유일해야 함',()=>{const e=base();e.locations.push({id:'other',name:'hall'});const p=preview(header+'\n'+line('ID 선택','10:00','10:20','hall'),e);assert.equal(p.hasErrors,false);assert.equal(p.rows[0].record.locationId,'hall');});
+test('기존 저장 스키마의 진행표 2000개 제한도 미리보기에서 전체차단',()=>{const e=base();e.programs=Array.from({length:2000},(_,i)=>({id:`old-${i}`,title:`기존 ${i}`,start:calendarMinute('2026-10-20','09:00'),end:calendarMinute('2026-10-20','09:05'),locationId:'',personId:'',dedicated:false,publicNote:'',internalNote:'',allowSharedLocation:false}));const p=preview(header+'\n'+line('초과','10:00','10:20',''),e);assert.equal(p.hasErrors,true);assert.ok(p.validation.errors.some(x=>x.code==='PROGRAM_PASTE_STRUCTURE'));assert.throws(()=>append(e,p));assert.equal(e.programs.length,2000);});
+
+test('잠긴 실제형 합성 배정·인원·조건·스냅샷은 추가 후에도 보존',()=>{const e=base();e.mode='staffing';const start=calendarMinute('2026-10-20','09:00'),end=start+60;const person=createPerson('가상 담당');person.id='person';person.availability=[{id:'availability',start,end:end+420,state:'available'}];e.people=[person];e.roles=[{id:'role',name:'가상 역할',requiredTags:[]}];e.demands=[{id:'demand',start,end,locationId:'hall',roleId:'role',count:1,leaderTag:'',leaderMin:0,phase:''}];e.assignments=[{id:'assignment',start,end,locationId:'hall',roleId:'role',personId:'person',locked:true,source:'manual'}];const before=structuredClone(e),p=preview(header+'\n'+line(),e),out=append(e,p);assert.equal(p.hasErrors,false);for(const key of ['people','assignments','demands','policy','snapshots','days','roles','locations','mode','edition'] as const)assert.deepEqual(out[key],before[key]);assert.deepEqual(e,before);});
