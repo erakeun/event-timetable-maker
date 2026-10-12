@@ -77,3 +77,12 @@ GitHub OAuth 인증에 workflow 수정 scope가 없어 Actions 파일 push가 �
 - 실제 Chromium·모바일 화면·클립보드·브라우저 IndexedDB 다중 탭·인쇄/PDF는 여전히 미실행이다. 기존 제한을 우회하지 않았다. 원격 commit/push/PR/merge/배포는 실행하지 않았다.
 
 - 후속 독립검토에서 읽기 전용 취소의 초점이 비활성 버튼에 남는 문제를 확인하여 제목으로 복귀하도록 수정했고 DOM 회귀검사에 포함했다. 브라우저 취소/단계이동의 무저장 검사는 300ms 자동저장 지연보다 오래 기다린 후 전체 저장 자료를 비교하도록 작성했다.
+
+## Windows 전체 회귀 검증 — 2026-10-12
+
+- 기준 main: `e2935ce84c68bbefdcdd318bd6a3e4d04847a6d3`. Windows, Node 24.19.0, 설치된 Chrome의 격리된 브라우저 context와 localhost 정적 빌드에서 합성 데이터로 실행했다.
+- 최초 전체 E2E는 21개 통과, 1개 실패였다. `program-paste.e2e.ts`의 `getByLabel('표 버전', { exact: true })`가 실제로 존재하는 버전 선택기를 찾지 못했다. 동일한 접근성 이름의 `combobox` 역할로 찾도록 테스트 1줄을 수정하자 실패 시나리오가 통과했고, 과거 확정본의 기존 두 행을 출력하는 후속 단정도 통과했다. 앱의 버전 선택·저장·출력 코드는 변경하지 않았다.
+- 최종 `npm test`: **121/121 통과**. `npm run build`: TypeScript + Vite 빌드 통과. 기존 대형 chunk 경고는 남는다.
+- 최종 `npm run test:e2e`: **22/22 통과**, 실패·건너뜀 0. 진행표 붙여넣기 4개 시나리오를 포함하여 저장·새로고침·Undo/Redo·과거 확정본 출력·키보드 취소·다중 탭 충돌·300행 모바일 미리보기를 실제 브라우저에서 확인했다. 전체 실행은 약 72초였다.
+- 기존 `JSDOM_MODULE=<설치된 jsdom 경로> node --test tests/program-paste.dom.cjs`: **13/13 통과**. jsdom을 새 프로젝트 의존성으로 추가하지 않았다. 앱 소스·package.json·package-lock.json·배포 파일은 변경하지 않았다.
+- 테스트 산출물은 로컬에만 보관한다. 이번 검증은 localhost의 합성 데이터에 한정하며, 운영 자료 쓰기·추가 배포·실물 휴대폰·네이티브 Excel·실물 프린터 검증은 수행하지 않았다.

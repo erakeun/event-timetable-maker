@@ -92,7 +92,7 @@ test('paste: append once, save/reload, Undo/Redo and public report retain source
   await expect(report.locator('.program-table tbody tr td:nth-child(2)')).toHaveText(['기존 뒤시각', '기존 앞시각', '추가 B', '추가 A']);
   await expect(report).toContainText('공개 내용');
   await expect(report).not.toContainText('합성 내부 제외');
-  await page.getByLabel('표 버전', { exact: true }).selectOption('past-snapshot');
+  await page.getByRole('combobox', { name: '표 버전', exact: true }).selectOption('past-snapshot');
   await expect(report.locator('.program-table tbody tr td:nth-child(2)')).toHaveText(['기존 뒤시각', '기존 앞시각']);
 });
 
