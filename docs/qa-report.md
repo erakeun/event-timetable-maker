@@ -86,3 +86,12 @@ GitHub OAuth 인증에 workflow 수정 scope가 없어 Actions 파일 push가 �
 - 최종 `npm run test:e2e`: **22/22 통과**, 실패·건너뜀 0. 진행표 붙여넣기 4개 시나리오를 포함하여 저장·새로고침·Undo/Redo·과거 확정본 출력·키보드 취소·다중 탭 충돌·300행 모바일 미리보기를 실제 브라우저에서 확인했다. 전체 실행은 약 72초였다.
 - 기존 `JSDOM_MODULE=<설치된 jsdom 경로> node --test tests/program-paste.dom.cjs`: **13/13 통과**. jsdom을 새 프로젝트 의존성으로 추가하지 않았다. 앱 소스·package.json·package-lock.json·배포 파일은 변경하지 않았다.
 - 테스트 산출물은 로컬에만 보관한다. 이번 검증은 localhost의 합성 데이터에 한정하며, 운영 자료 쓰기·추가 배포·실물 휴대폰·네이티브 Excel·실물 프린터 검증은 수행하지 않았다.
+
+
+## MACH logo navigation — Windows validation, 2026-10-12
+
+- Added the approved transparent PNG outside the React root with the exact MACH hub destination. No application or output-rendering logic changed.
+- Windows Chrome: 320/375/768/1440 px, no document overflow, image decode, accessible link, visible keyboard focus, Enter navigation, and print exclusion passed.
+- Vitest: 121/121 passed. TypeScript and Vite production build passed; existing large-chunk warning remains.
+- Existing Playwright E2E: 22/22 passed, 0 skipped (including 4 paste scenarios), using installed Windows Chrome and a localhost preview. A local, uncommitted config disabled only automatic server startup; it kept all existing tests.
+- No business data, real submissions, or manual deployment. The main branch contains previously unpublished changes; this logo commit does not authorize publishing gh-pages.
