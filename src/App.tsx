@@ -59,6 +59,14 @@ function Workspace(){
  useEffect(()=>{if(event?.mode==='program'&&![0,5,4].includes(step))setStep(5)},[event?.mode,step]);
  const readonly=event?.status!=='draft'||blocked;
  return <div className="app-shell"><header className="app-header"><div className="header-inner"><button className="brand" onClick={async()=>{await flush();if(pending.current){setMessage('저장하지 못한 내용이 있습니다. 백업이나 사본 보관 후 이동하세요.');return;}display(null);void refresh()}}><span className="brand-icon" aria-hidden="true">▤</span><span>행사 시간표 제작기<small>EVENT TIMETABLE MAKER</small></span></button><span className="local-badge">기기 내 저장 · 로그인 없음</span>{event&&<span className={'save-state '+(saveStatus==='저장 실패'?'error-text':'')} role="status">{saveStatus}</span>}</div></header>
+    <style>{`
+      .private-feedback { display: flex; justify-content: flex-end; padding: 8px 24px; }
+      .private-feedback a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px 14px; border: 1px solid #cbd5d1; border-radius: 8px; background: #fff; color: #233b34; font-size: 13px; line-height: 1.4; text-decoration: none; text-align: center; }
+      .private-feedback a:hover { background: #eef3f0; }
+      .private-feedback a:focus-visible { outline: 3px solid #0e4a84; outline-offset: 3px; }
+      @media print { .private-feedback { display: none !important; } }
+    `}</style>
+    <div className="private-feedback"><a href="https://script.google.com/macros/s/AKfycby2ShSY4ruQr9Ku-QlljB05Ygk3ygDRtX-hXWO0hfUmEULl-jK9Z7mqh_k2m9GSV70v/exec?tool=27" target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">오류·개선 제안 (비공개 · 새 창)</a></div>
  <input ref={backupInput} className="sr-only" type="file" accept=".json" aria-label="JSON 백업 파일" onChange={x=>{const f=x.target.files?.[0];if(f)void restore(f);x.target.value=''}}/>
  <main className="app">
  {message&&<div className="message" role="status"><span>{message}</span><button aria-label="알림 닫기" onClick={()=>setMessage('')}>×</button></div>}
